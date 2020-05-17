@@ -3,13 +3,13 @@
 # we optimize the exponential loss (the behavior is sensibly the same with the logistic loss)
 # we use a specific step-size schedule motivated by the theory in this ref https://arxiv.org/abs/2002.04486 (sections 4 & 5)
 
-## HOW TO RUN THE CODE
-## in a prompt first run:
+# HOW TO RUN THE CODE
+# in a prompt first run:
 # include("2NNlogistic-param-predict.jl")
-## Then for fast prototyping, run for instance the following code (takes 1 min)
+# Then for fast prototyping, run for instance the following code (takes 1 min)
 # illustration(4, 60, 200, 0.4, 100000, 10, 0.05);
-## These parameters are explained in the header of the function "illustration"
-## A good illustration is obtained as follows (takes 20 min)
+# These parameters are explained in the header of the function "illustration"
+# A good illustration is obtained as follows (takes 20 min):
 # Random.seed!(9); # 9 generates a nice random problem
 # illustration(4, 60, 400, 0.4, 800000, 200, 0.005);
 
@@ -25,9 +25,9 @@ We use the step-size schedule from in https://arxiv.org/abs/2002.04486 (sections
 INPUT: X (training input), Y (training output), m (nb neurons), both: training both layers or just the output layer
 OUTPUT: Ws (training trajectory)
 """
-function twonet(X, Y, m, stepsize, niter) 
-    
-    (n,d) = size(X) # n samples in R^d  
+function twonet(X, Y, m, stepsize, niter)
+
+    (n,d) = size(X) # n samples in R^d
     # initialize
     W = randn(m, d+1)
     # input weights initialized uniformly on the unit sphere
@@ -52,14 +52,14 @@ function twonet(X, Y, m, stepsize, niter)
         gradR = temp .* Y ./ sum(temp)' # gradient of the loss
         grad_w1 = (W[:,end] .* float.(act .> 0) * ( X .* gradR  ))  # gradient for input weights
         grad_w2 = act * gradR  # gradient for output weights
-        
+
         grad = cat(grad_w1, grad_w2, dims=2) # size (m × d+1)
         betas[iter] = sum(W.^2)/m
         loss[iter] = margin - log(sum(exp.(margin .- perf))/n)
         margins[iter] = margin/betas[iter] # margin in F_1 norm
         W = W + stepsize * grad/(sqrt(iter+1))
     end
-    
+
     return Ws, loss, margins, betas
 end
 
@@ -97,6 +97,16 @@ R = Delta*rand(n) # shift magnitude
 X = cat(ones(n), cluster_center(P,k)[1] .+ R .* cos.(T),cluster_center(P,k)[2] + R .* sin.(T), (rand(n,sd) .- 1/2), dims=2)
 Y = A[P]
 
+# plot training set
+X1 = X[(Y .== 1),:]
+X2 = X[(Y .== -1),:]
+fig = figure(figsize=[3,3])
+plot(X1[:,2],X1[:,3],"+k")
+plot(X2[:,2],X2[:,3],"_k")
+axis("equal");axis("off");
+display(fig)
+
+
 # train the neural network
 Ws, loss, margins, betas = twonet(X, Y, m, stepsize, niter)
 
@@ -109,21 +119,21 @@ Ws = Ws[:,:,ts]
 Wproj = Ws[:,1:end-1,:] .* abs.(Ws[:,end:end,:])
 WN   = sqrt.(sum(Wproj.^2, dims = 2))
 Wdir = Wproj ./ WN
-Wlog = tanh.(WN) .* Wdir
-    
+Wlog = tanh.(0.5*WN) .* Wdir
+
 
 @showprogress 1 "Plotting images..." for k = 1:length(ts)
        ioff() # turns off interactive plotting
     fig = figure(figsize=[7,4])
     ax1 = subplot(121, projection="3d")
     ax1.set_position([0,0.1,0.5,0.8])
-    
+
     if k<11
         indt = 1:k
     else
         indt = (k-10):k
     end
-    
+
     for i = 1:size(Wlog,1)
         plot3D(Wlog[i,2,indt],Wlog[i,3,indt],Wlog[i,1,indt], color="k", linewidth=0.2) # tail
     end
@@ -136,20 +146,21 @@ Wlog = tanh.(WN) .* Wdir
     ax1.set_xticks([-1/2, 0, 1/2])
     ax1.set_yticks([-1/2, 0, 1/2])
     ax1.set_zticks([-1/2, 0, 1/2])
-    
+    ax1.view_init(25-20*sinpi(k/length(ts)),45-45*cospi(k/length(ts)))
+
     ax2 = subplot(122)
     ax2.set_position([0.45,0.25,0.5,0.5])
 
     f(x1,x2,k) = (1/m) * sum( Ws[:,end,k] .* max.( Ws[:,1:3,k] * [1;x1;x2], 0.0)) # prediction function
-    
+
     xs = -0.8:resolution:0.8
     tab = [f(xs[i],xs[j],k) for i=1:length(xs), j=1:length(xs)]
     pcolormesh(xs', xs, tanh.(tab'), cmap="coolwarm", shading="gouraud", vmin=-1.0, vmax=1.0, edgecolor="face")
-        
-    xs = -0.8:resolution:0.8 
+
+    xs = -0.8:resolution:0.8
     tab = [f(xs[i],xs[j],k) for i=1:length(xs), j=1:length(xs)]
     contour(xs', xs, tanh.(tab'), levels =0, colors="k", antialiased = true, linewidths=2)
-    
+
     # plot training set
     X1 = X[(Y .== 1),:]
     X2 = X[(Y .== -1),:]
@@ -162,7 +173,6 @@ Wlog = tanh.(WN) .* Wdir
     savefig("dynamics_$(k).png",bbox_inches="tight", dpi=300)
     close(fig)
 end
-    
+
 
 end
-
